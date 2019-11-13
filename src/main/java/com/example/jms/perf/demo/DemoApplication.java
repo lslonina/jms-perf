@@ -33,15 +33,19 @@ import java.io.InputStreamReader;
 @EnableJms
 public class DemoApplication {
 
+    public static final int SESSION_CACHE_SIZE = 2;
+    public static final String CONCURRENT_LISTENERS = "16";
+    public static final boolean CACHE_CONSUMERS = true;
+
     public static void main(String[] args) throws IOException {
         long t1 = System.currentTimeMillis();
-        String typeProfile;
+        String typeProfile = "";
         typeProfile = "sender";
         typeProfile = "receiver";
 
-        String connectionProfile;
+        String connectionProfile = "";
         connectionProfile = "cached";
-        connectionProfile = "single";
+//        connectionProfile = "single";
 
         String profiles = typeProfile + "," + connectionProfile;
         System.setProperty(AbstractEnvironment.ACTIVE_PROFILES_PROPERTY_NAME, profiles);
@@ -62,7 +66,7 @@ public class DemoApplication {
         String messageContent = readFromInputStream(resourceAsStream);
 
         long lt1 = System.currentTimeMillis();
-        for (int i = 0; i < 5000; ++i) {
+        for (int i = 0; i < 100000; ++i) {
             if (i % 100 == 0) {
                 long lt2 = System.currentTimeMillis();
                 System.out.println("Iteration: " + i + ": " + (lt2 - lt1) / 1000.0);
@@ -93,7 +97,7 @@ public class DemoApplication {
             mqQueueConnectionFactory.setChannel("DEV.APP.SVRCONN");
             mqQueueConnectionFactory.setPort(1414);
             mqQueueConnectionFactory.setQueueManager("QM1");
-            mqQueueConnectionFactory.setSSLCipherSuite("TLS_RSA_WITH_AES_128_CBC_SHA256");
+//            mqQueueConnectionFactory.setSSLCipherSuite("TLS_RSA_WITH_AES_128_CBC_SHA256");
         } catch (JMSException e) {
             e.printStackTrace();
         }
@@ -101,6 +105,7 @@ public class DemoApplication {
     }
 
     @Bean
+//    @Primary
     public UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter(MQConnectionFactory mqConnectionFactory) {
         UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter = new UserCredentialsConnectionFactoryAdapter();
         userCredentialsConnectionFactoryAdapter.setUsername("app");
@@ -111,20 +116,20 @@ public class DemoApplication {
 
     @Bean
     @Primary
-    @Profile("caching")
-    public SingleConnectionFactory singleConnectionFactory(UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter) {
+    @Profile("cached")
+    public CachingConnectionFactory cachingConnectionFactory(UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter) {
         CachingConnectionFactory cachingConnectionFactory = new CachingConnectionFactory();
         cachingConnectionFactory.setTargetConnectionFactory(userCredentialsConnectionFactoryAdapter);
         cachingConnectionFactory.setReconnectOnException(true);
-        cachingConnectionFactory.setCacheConsumers(true);
-        cachingConnectionFactory.setSessionCacheSize(1);
+        cachingConnectionFactory.setCacheConsumers(CACHE_CONSUMERS);
+        cachingConnectionFactory.setSessionCacheSize(SESSION_CACHE_SIZE);
         return cachingConnectionFactory;
     }
 
     @Bean
     @Primary
     @Profile("single")
-    public SingleConnectionFactory singleConnectionFactory2(UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter) {
+    public SingleConnectionFactory singleConnectionFactory(UserCredentialsConnectionFactoryAdapter userCredentialsConnectionFactoryAdapter) {
         SingleConnectionFactory singleConnectionFactory = new SingleConnectionFactory();
         singleConnectionFactory.setTargetConnectionFactory(userCredentialsConnectionFactoryAdapter);
         singleConnectionFactory.setReconnectOnException(true);
@@ -142,7 +147,7 @@ public class DemoApplication {
                                                         PlatformTransactionManager jmsTransactionManager) {
         DefaultJmsListenerContainerFactory factory = new DefaultJmsListenerContainerFactory();
         configurer.configure(factory, singleConnectionFactory);
-        factory.setConcurrency("16");
+        factory.setConcurrency(CONCURRENT_LISTENERS);
         factory.setTransactionManager(jmsTransactionManager);
         return factory;
     }
